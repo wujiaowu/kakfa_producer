@@ -1,0 +1,72 @@
+KafkaProducer api
+时间戳问题
+如果用户指定了timestamp，则record使用用户指定的时间，如果用户没有指定，则会使用producer端的当前时间。
+在broker端，如果配置了时间戳采用createtime方式，
+则使用producer传给Broker的record中的timestramp时间，如果指定为logappendtime，则在broker写入到Log文件时会重写该时间。
+Interfaces
+1.callback : producerdemo_callback.java
+    void onCompletion(RecordMetadata metadata,Exception exception)
+2.Partitioner
+    int partition(String topic,Object key,byte[] keyBytes,Object value,byte[] valueBytes,Cluster cluster)
+3.Producer
+4.ProducerInterceptor
+    method：close()
+          onAcknowledgement(RecordMetadata metadata, Exception exception)
+          onSend(ProducerRecord<K,V> record)
+ Class
+ 1.KafkaProducer
+ 2.MockProducer
+ 3.ProducerConfig
+ 4.ProducerRecord
+ 5.RecordMetadata
+        // ACK机制, 消息发送需要kafka服务端确认
+        props.put("acks", "-1");
+//        //请求发送失败后，retries=0,将不会重复发送（重试的次数）
+//        props.put("retries",1);
+//       // 配置缓冲区的大小（通常每个分区一个缓冲区）
+//        props.put("batch.size", 16384);
+//        //设置0.1ms后发送请求,默认为0
+//       props.put("linger.ms", 100);
+//        //控制缓冲区所用的内存大小478949
+//        props.put("request.timeout.ms",1000);
+//         props.put("buffer.memory", 33532);
+//   //     props.put("client.id","wj producer") ;
+producer设置缓冲区。send()方法是异步进行，它在发送信息之前将记录发送到缓冲区
+acks ：配置请求成功的标准（可设置为all）
+设置：
+retries ：请求发送失败后，自动重新发送， retries 设置为0之后，将不会重复发送
+batch.size:配置缓冲区的大小（通常每个分区一个缓冲区）
+linger.ms：等待x毫秒数后，发送请求（可减少请求发送的次数，最好设置为大于0）
+buffer.memory：控制缓冲区所用的内存大小
+max.block.ms：块传送的时间阀值
+key.serializer and value.serializer：设置转换 ProducerRecord 到byte的方式（ ByteArraySerializer or StringSerializer）
+构造函数：
+KafkaProducer(Map<String,Object> configs)
+设置键值对类型，及配置文件
+KafkaProducer(Map<String,Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer)
+设置键值对类型，及配置文件。key,value序列化
+KafkaProducer(Properties properties)
+KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer)
+例:
+Producer<String, String> producer = new KafkaProducer(new properties);
+
+方法总结：
+.close();
+关闭producer
+.close(long timeout, TimeUnit timeUnit);
+将等待timeout时间，让Producer发送完未完成的请求。timeUnit为timeout的时间
+.flush()
+立即发送缓冲池中的请求
+for(ConsumerRecord<String, String> record: consumer.poll(100))
+     producer.send(new ProducerRecord("my-topic", record.key(), record.value());
+ producer.flush();
+ consumer.commit();
+.metrics()
+获取producer的全部设置
+.partitionsFor(String topic)
+从你给的topic获取分区的信息,用于自定义风区
+.send(ProducerRecord<K,V> record)
+异步发送record给topic
+.send(ProducerRecord<K,V> record, Callback callback)
+发送成功后提供回调函数
+ producer.send(new ProducerRecord<byte[],byte[]>(topic, partition, key1, value1), callback1);

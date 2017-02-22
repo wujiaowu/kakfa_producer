@@ -1,0 +1,13 @@
+kafka_connect
+org.apache.kafka.connect.connector
+Interfaces
+1. ConnectorContext
+    raiseError(Exception e)
+ 
+    requestTaskReconfiguration() 
+    运行时重新配置任务。当比如分区需要添加删除时
+2. Task
+Classes
+1. Connector
+2. ConnectRecord
+

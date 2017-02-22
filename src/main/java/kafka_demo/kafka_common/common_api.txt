@@ -1,0 +1,65 @@
+org.apache.kafka.common
+interface
+1. ClusterResourceListener 返回metadata在集群中更改的通知
+    通过配置选项kafka.server:type=KafkaServer，name=ClusterId就可以使用cluster id，
+    同时cluster id会作为metadata返回信息的一部分回馈给客户端。
+    Serializers，client interceptors 和metric reportes可以通过ClusterResourceListener接口获取cluster id。
+    方法：onUpdate(clusterResource ) 获取ClusterResource的更新
+2. Configurable 由反射和配置参数实例化
+    子接口ConsumerInterceptor<K,V>, Partitioner, ProducerInterceptor<K,V>
+    方法：configure(Map<String,?> configs)
+3.Metric 一个跟踪监测的数值度量
+    方法：metricName()
+            value()
+Classes
+1.Cluster
+2.ClusterResource
+3.MetricName
+    可以获取属性信息：
+    name:metric的name
+    group：所属的group
+    description（可选）：可读的注释
+    tags（可选）：额外的键值对属性
+4.Node
+5.PartitionInfo
+    PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) 
+6.TopicPartition
+                        方法：inSyncReplicas()     判断是否在ISR（与leader同步的副本，在leader故障后，可以成为新的leader）列表中
+                              leader()      返回leader节点的id
+                              partition()   返回分区的id
+                              replicas()    副本集
+                              topic()       返回topic名字
+                              toString()
+   
+org.apache.kafka.common.config
+interface
+1. ConfigDef.Recommender
+    validValues(String name, Map<String,Object> parsedConfig)
+ 	visible(String name, Map<String,Object> parsedConfig)
+2. ConfigDef.Validator
+     ensureValid(String name, Object value)
+     Perform single configuration validation.
+Class
+1. AbstractConfig
+2. Config
+3. ConfigDef
+此类用于指定预期配置的设置。为每个配置，您可以指定名称、类型、默认值、文件组信息、
+组中的顺序，配置值的宽度和适合用户界面中显示的名称。
+您可以通过重写用于单个配置验证的验证逻辑
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

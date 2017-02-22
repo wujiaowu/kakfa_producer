@@ -1,0 +1,147 @@
+KafkaConsumer api
+注意：
+KafkaProducer是线程安全的，可以多个线程共享一个producer实例。但Consumer却不是。
+public ConsumerRecords<K, V> poll(long timeout) {  
+     acquire();   //这里的acquire/release不是为了多线程加锁，恰恰相反：是为了防范多线程调用。如果发现多线程调用，内部会直接抛异常出来  
+     ...  
+     release();   
+}
+
+offsets and Consumer Position
+position 
+     设置下一个数据的偏移量（大于分区中已经出现的偏移量）
+     poll(long)
+committed position
+     设置last offset读取之前的消息
+Consumer Groups and Topic Subscriptions
+group.id
+     设置同一个consumer group
+subscribe 
+     选择topics进行消费（每个分区对应一个consumer group）
+poll(long)
+     poll API去确认consumer是否还活着
+session.timeout.ms
+     超过这个时间没有返回heartbeats，认为这个consumer dead，它的分区自动重新分配
+max.poll.interval.ms
+     活性检测机制，poll最大间隔时间，超过这个时间consumer自动离开consumer group
+     这种情况下可以看到 commitSync()引发的CommitFailedException
+     所以留在group内，需长期poll
+max.poll.records
+     限制records总数
+自动配置偏移量的例子
+      Properties props = new Properties();
+     //发现brokers在集群中
+     props.put("bootstrap.servers", "localhost:9092");
+     props.put("group.id", "test");
+     //偏移量自动控制
+     props.put("enable.auto.commit", "true");
+     props.put("auto.commit.interval.ms", "1000");
+     props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+     consumer.subscribe(Arrays.asList("foo", "bar"));
+     while (true) {
+         ConsumerRecords<String, String> records = consumer.poll(100);
+         for (ConsumerRecord<String, String> record : records)
+             System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
+     }
+ 
+自定义偏移量的例子
+     Properties props = new Properties();
+     props.put("bootstrap.servers", "localhost:9092");
+     props.put("group.id", "test");
+     props.put("enable.auto.commit", "false");
+     props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+     consumer.subscribe(Arrays.asList("foo", "bar"));
+     final int minBatchSize = 200;
+     List<ConsumerRecord<String, String>> buffer = new ArrayList<>();
+     while (true) {
+         ConsumerRecords<String, String> records = consumer.poll(100);
+         for (ConsumerRecord<String, String> record : records) {
+             buffer.add(record);
+         }
+         if (buffer.size() >= minBatchSize) {
+             insertIntoDb(buffer);
+             consumer.commitSync();
+             buffer.clear();
+         }
+     }
+
+记录每个分区
+ try {
+         while(running) {
+             ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
+             for (TopicPartition partition : records.partitions()) {
+                 List<ConsumerRecord<String, String>> partitionRecords = records.records(partition);
+                 for (ConsumerRecord<String, String> record : partitionRecords) {
+                     System.out.println(record.offset() + ": " + record.value());
+                 }
+                 long lastOffset = partitionRecords.get(partitionRecords.size() - 1).offset();
+                 consumer.commitSync(Collections.singletonMap(partition, new OffsetAndMetadata(lastOffset + 1)));
+             }
+         }
+     } finally {
+       consumer.close();
+     }
+ 分配分区
+     String topic = "foo";
+     TopicPartition partition0 = new TopicPartition(topic, 0);
+     TopicPartition partition1 = new TopicPartition(topic, 1);
+     consumer.assign(Arrays.asList(partition0, partition1));
+同时不可使用 subscribe
+在kafka以外的地方存储offset
+
+
+
+
+例子
+    import java.io.UnsupportedEncodingException;  
+    import java.util.List;  
+    import java.util.Properties;  
+    import java.util.concurrent.TimeUnit;  
+       
+    import kafka.consumer.*;  
+    import kafka.javaapi.consumer.ConsumerConnector;  
+    import kafka.message.MessageAndMetadata;  
+       
+    import org.apache.commons.collections.CollectionUtils;  
+       
+      
+    public class kafkaConsumer {  
+       
+      public static void main(String[] args) throws InterruptedException, UnsupportedEncodingException {  
+       
+        Properties properties = new Properties();  
+        properties.put("zookeeper.connect", "192.168.0.1:2181/test-datacenter/test-server");  
+        properties.put("auto.commit.enable", "true");  
+        properties.put("auto.commit.interval.ms", "60000");  
+        properties.put("group.id", "test");  
+       
+        ConsumerConfig consumerConfig = new ConsumerConfig(properties);  
+       
+        ConsumerConnector javaConsumerConnector = Consumer.createJavaConsumerConnector(consumerConfig);  
+       
+        //topic的过滤器  
+        Whitelist whitelist = new Whitelist("test");  
+        List<KafkaStream<byte[], byte[]>> partitions = javaConsumerConnector.createMessageStreamsByFilter(whitelist);  
+       
+        if (CollectionUtils.isEmpty(partitions)) {  
+          System.out.println("empty!");  
+          TimeUnit.SECONDS.sleep(1);  
+        }  
+       
+        //消费消息  
+        for (KafkaStream<byte[], byte[]> partition : partitions) {  
+       
+          ConsumerIterator<byte[], byte[]> iterator = partition.iterator();  
+          while (iterator.hasNext()) {  
+            MessageAndMetadata<byte[], byte[]> next = iterator.next();  
+            System.out.println("partiton:" + next.partition());  
+            System.out.println("offset:" + next.offset());  
+            System.out.println("message:" + new String(next.message(), "utf-8"));  
+          }  
+        }   
+      }  
+    }  
